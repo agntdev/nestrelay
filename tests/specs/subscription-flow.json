@@ -2,9 +2,9 @@
   {
     "name": "subscription receives a matching submitted listing",
     "steps": [
-      { "send": { "callback": "subs:add" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Which city or neighborhood should we watch? Type ‘any’ for all locations." } }] },
-      { "send": { "text": "Riverside" }, "expect": [{ "method": "sendMessage", "payload": { "text": "What’s your maximum price? Type ‘any’ for no limit." } }] },
-      { "send": { "text": "1500" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Your subscription is active. We’ll send matching listings, up to 20 a day." } }] },
+      { "send": { "callback": "subs:add" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Какой город или район отслеживать? Напишите «любой» для всех мест." } }] },
+      { "send": { "text": "Riverside" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Какая максимальная цена? Напишите «любой», если лимита нет." } }] },
+      { "send": { "text": "1500" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Подписка активна. Мы пришлём до 20 подходящих объявлений в день." } }] },
       { "send": { "callback": "submit:start" }, "expect": [{ "method": "sendMessage" }] },
       { "send": { "callback": "submit:photos:done" }, "expect": [{ "method": "sendMessage" }] },
       { "send": { "text": "Riverside flat" }, "expect": [{ "method": "sendMessage" }] },
@@ -13,7 +13,7 @@
       { "send": { "text": "Riverside" }, "expect": [{ "method": "sendMessage" }] },
       { "send": { "callback": "submit:type:apartment" }, "expect": [{ "method": "sendMessage" }] },
       { "send": { "callback": "submit:beds:1" }, "expect": [{ "method": "sendMessage" }] },
-      { "send": { "callback": "submit:confirm" }, "expect": [{ "method": "sendMessage", "payload": { "text": "A listing matches your subscription.\n\nRiverside flat\nRiverside · apartment · 1 bed\n1,200\nQuiet home" } }] }
+      { "send": { "callback": "submit:confirm" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Новое объявление подходит под вашу подписку.\n\nRiverside flat\nRiverside · apartment · 1 сп.\n1 200\nQuiet home" } }] }
     ]
   }
 ]

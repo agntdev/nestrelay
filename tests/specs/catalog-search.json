@@ -7,7 +7,7 @@
           {
             "method": "sendMessage",
             "payload": {
-              "text": "No listings match yet — try another search or submit one."
+              "text": "Подходящих объявлений пока нет — измените поиск или разместите своё."
             }
           }
         ],

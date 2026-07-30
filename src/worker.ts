@@ -14,6 +14,8 @@ import { webhookCallback, Composer, type Bot } from "grammy";
 import { buildBot, type Ctx } from "./bot.js";
 import { handlers } from "./handlers.generated.js";
 import { createDurableSessionStorage, type WorkerEnv } from "./toolkit/session/durable.js";
+import { issueSession, publicListing, readSession, verifyInitData, webPage, webResponse } from "./webapp.js";
+import type { Domain } from "./listing-data.js";
 
 export { ChatDO } from "./toolkit/session/durable.js";
 
@@ -84,6 +86,33 @@ export default {
 
     if (url.pathname === "/health") {
       return Response.json({ ok: true, runtime: "cloudflare-workers" });
+    }
+
+    // The Mini App is served only over HTTPS by Cloudflare. Its API authenticates
+    // Telegram's signed initData and uses a 15-minute, CSRF-bound bearer token.
+    if (url.pathname === "/webapp" && request.method === "GET") {
+      if (url.protocol !== "https:") return new Response("HTTPS required", { status: 400 });
+      return new Response(webPage(), { headers: { "content-type": "text/html; charset=utf-8", "content-security-policy": "default-src 'self' https://telegram.org; style-src 'unsafe-inline'; script-src 'unsafe-inline' https://telegram.org; connect-src 'self'" } });
+    }
+    if (url.pathname === "/webapp/auth" && request.method === "POST") {
+      if (url.protocol !== "https:") return webResponse({ error: "HTTPS required" }, 400);
+      const body = await request.json().catch(() => null) as { initData?: string } | null;
+      const user = await verifyInitData(body?.initData ?? "", env.BOT_TOKEN);
+      if (!user) return webResponse({ error: "Unauthorized" }, 401);
+      return webResponse(await issueSession(user.id, env.BOT_TOKEN));
+    }
+    if (url.pathname.startsWith("/webapp/")) {
+      const claims = await readSession(request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? null, env.BOT_TOKEN);
+      if (!claims || request.headers.get("x-csrf-token") !== claims.csrf) return webResponse({ error: "Unauthorized" }, 401);
+      const stub = env.CHAT_DO.get(env.CHAT_DO.idFromName("realestate:catalog"));
+      const read = async (): Promise<Domain> => { const r = await stub.fetch("https://do/domain", { method: "GET" }); return r.status === 204 ? { next: 1, listings: [], subscriptions: [], reports: [], chats: [], users: {} } : await r.json() as Domain; };
+      const write = (value: Domain) => stub.fetch("https://do/domain", { method: "PUT", body: JSON.stringify(value) });
+      if (url.pathname === "/webapp/listings" && request.method === "GET") { const domain = await read(); return webResponse({ listings: domain.listings.filter((l) => !l.archived).map(publicListing) }); }
+      if (url.pathname === "/webapp/subscriptions" && request.method === "GET") { const domain = await read(); return webResponse({ subscriptions: domain.subscriptions.filter((s) => s.owner === claims.userId) }); }
+      if (url.pathname === "/webapp/subscriptions" && request.method === "POST") { const body = await request.json() as { location?: string; priceMax?: number }; const domain = await read(); domain.subscriptions.push({ id: `s${domain.next++}`, owner: claims.userId, chatId: Number(claims.userId), location: body.location, priceMax: body.priceMax, active: true, matchDays: [] }); await write(domain); return webResponse({ ok: true }, 201); }
+      if (/^\/webapp\/subscriptions\/s\d+$/.test(url.pathname) && request.method === "DELETE") { const id = url.pathname.split("/").at(-1)!; const domain = await read(); domain.subscriptions = domain.subscriptions.filter((s) => !(s.id === id && s.owner === claims.userId)); await write(domain); return webResponse({ ok: true }); }
+      if (/^\/webapp\/listings\/l\d+$/.test(url.pathname) && request.method === "PATCH") { const id = url.pathname.split("/").at(-1)!; const body = await request.json() as Partial<Domain["listings"][number]>; const domain = await read(); const listing = domain.listings.find((l) => l.id === id && l.owner === claims.userId); if (!listing) return webResponse({ error: "Not found" }, 404); Object.assign(listing, { title: body.title ?? listing.title, description: body.description ?? listing.description, price: body.price ?? listing.price, location: body.location ?? listing.location, archived: body.archived ?? listing.archived }); await write(domain); return webResponse({ listing: publicListing(listing) }); }
+      return webResponse({ error: "Not found" }, 404);
     }
 
     if (request.method === "POST" && url.pathname === "/tg") {

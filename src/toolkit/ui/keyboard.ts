@@ -16,10 +16,11 @@ export interface UrlButton {
   text: string;
   url: string;
 }
+export interface WebAppButton { text: string; web_app: { url: string }; }
 
 /** A single inline keyboard button. Discriminated so the markup is structurally
  *  assignable to grammY's `reply_markup` while staying dependency-free. */
-export type InlineButton = CallbackButton | UrlButton;
+export type InlineButton = CallbackButton | UrlButton | WebAppButton;
 
 /** Telegram InlineKeyboardMarkup shape. */
 export interface InlineKeyboardMarkup {
@@ -35,6 +36,7 @@ export function inlineButton(text: string, callbackData: string): CallbackButton
 export function urlButton(text: string, url: string): UrlButton {
   return { text, url };
 }
+export function webAppButton(text: string, url: string): WebAppButton { return { text, web_app: { url } }; }
 
 /** Wrap rows of buttons into an InlineKeyboardMarkup. */
 export function inlineKeyboard(rows: InlineButton[][]): InlineKeyboardMarkup {

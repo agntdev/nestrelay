@@ -8,7 +8,7 @@
           {
             "method": "sendMessage",
             "payload": {
-              "text": "Use the menu to browse listings, submit a property, save a search, or report a concern.\n\nYour saved searches send up to 20 matching listings each day."
+              "text": "Откройте меню, чтобы посмотреть объявления, разместить объект, сохранить поиск или пожаловаться.\n\nСохранённый поиск присылает не более 20 подходящих объявлений в день."
             }
           }
         ]

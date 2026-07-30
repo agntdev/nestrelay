@@ -7,7 +7,7 @@
           {
             "method": "sendMessage",
             "payload": {
-              "text": "Send photos if you have them, then tap Continue."
+              "text": "Отправьте фотографии, если они есть, затем нажмите «Продолжить»."
             }
           }
         ],

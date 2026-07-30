@@ -8,7 +8,7 @@
           {
             "method": "sendMessage",
             "payload": {
-              "text": "I didn’t understand that. Use the menu or tap /help for guidance."
+              "text": "Не удалось распознать сообщение. Откройте меню или нажмите /help."
             }
           }
         ]
