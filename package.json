@@ -6,7 +6,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "test": "vitest run",
+    "test": "npm run gen:handlers && vitest run",
     "gen:handlers": "node scripts/gen-handlers.mjs",
     "typecheck:worker": "tsc -p tsconfig.worker.json --noEmit",
     "build:worker": "npm run gen:handlers && npm run typecheck:worker && esbuild src/worker.ts --bundle --format=esm --platform=neutral --conditions=worker,browser --external:node:* --outfile=dist/worker.js && node scripts/check-worker-bundle.mjs"
