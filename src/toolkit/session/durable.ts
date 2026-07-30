@@ -144,6 +144,19 @@ export class ChatDO {
       }
     }
 
+    // Small durable application record used by bots that need shared domain data.
+    // Callers maintain their own explicit indexes inside this record; no key scans.
+    if (url.pathname === "/domain") {
+      if (request.method === "GET") {
+        const value = await this.state.storage.get<unknown>("domain");
+        return value === undefined ? new Response(null, { status: 204 }) : Response.json(value);
+      }
+      if (request.method === "PUT") {
+        await this.state.storage.put("domain", await request.json());
+        return new Response(null, { status: 204 });
+      }
+    }
+
     // Schedule a reminder + (re)arm the alarm to the earliest due one.
     if (url.pathname === "/remind" && request.method === "POST") {
       const rem = (await request.json()) as Reminder;

@@ -1,0 +1,18 @@
+[
+  {
+    "name": "report listing archives it for moderation",
+    "steps": [
+      { "send": { "callback": "submit:start" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "submit:photos:done" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Listing to review" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Needs review" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "900" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "text": "Central" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "submit:type:apartment" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "submit:beds:1" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "submit:confirm" }, "expect": [{ "method": "sendMessage" }] },
+      { "send": { "callback": "report:listing:l1" }, "expect": [{ "method": "sendMessage", "payload": { "text": "What’s the issue?" } }] },
+      { "send": { "callback": "report:reason:misleading" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Thanks. We’ve sent this listing to moderation and removed it from the catalog while it’s reviewed." } }] }
+    ]
+  }
+]

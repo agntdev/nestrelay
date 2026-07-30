@@ -7,7 +7,7 @@
           {
             "method": "sendMessage",
             "payload": {
-              "text": "View and edit active filters"
+              "text": "No saved filters yet — create one to get matching listings."
             }
           }
         ],

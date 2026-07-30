@@ -7,7 +7,7 @@
           {
             "method": "sendMessage",
             "payload": {
-              "text": "Initiates guided listing submission form"
+              "text": "Send photos if you have them, then tap Continue."
             }
           }
         ],
