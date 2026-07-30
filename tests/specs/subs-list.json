@@ -1,0 +1,20 @@
+[
+  {
+    "name": "Manage Subscriptions",
+    "steps": [
+      {
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "View and edit active filters"
+            }
+          }
+        ],
+        "send": {
+          "callback": "subs:list"
+        }
+      }
+    ]
+  }
+]
