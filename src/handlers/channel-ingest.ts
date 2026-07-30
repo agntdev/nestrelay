@@ -16,11 +16,16 @@ composer.on("channel_post:text", async (ctx) => {
   const location = text.match(/(?:location|area|neighborhood)\s*[:\-]\s*([^\n]+)/i)?.[1]?.trim() ?? "Location not provided";
   if (!Number.isFinite(price) || price <= 0) return;
   const data = await readDomain(ctx); const fp = fingerprint(title, location, price);
-  if (data.listings.some((l) => l.fingerprint === fp)) return;
+  data.ingestion ??= { accepted: 0, duplicates: 0, failed: 0 };
+  data.ingestion.lastPostAt = now().toISOString();
+  if (data.listings.some((l) => l.fingerprint === fp)) { data.ingestion.duplicates++; await writeDomain(ctx, data); return; }
   const propertyType = /house|villa|townhome/i.test(text) ? "house" : /room|shared/i.test(text) ? "room" : "apartment";
   const bedrooms = Number(text.match(/(\d+)\s*(?:bed|br)/i)?.[1] ?? "0");
   const listing: Listing = { id: nextId(data, "l"), owner: "channel", ownerChatId: ctx.chat.id, title, description: text, photos: [], price, location, propertyType, bedrooms, source: "channel", postedAt: now().toISOString(), fingerprint: fp };
   data.listings.push(listing);
+  data.ingestion.accepted++;
+  data.audit ??= [];
+  data.audit.push({ at: now().toISOString(), actor: "channel", action: "ingested", listingId: listing.id });
   for (const sub of data.subscriptions.filter((s) => matches(listing, s))) {
     if (sub.matchDays.filter((d) => d === day()).length >= 20) continue;
     sub.matchDays.push(day());

@@ -11,6 +11,12 @@ export interface Listing {
   location: string;
   propertyType: string;
   bedrooms: number;
+  area?: number;
+  latitude?: number;
+  longitude?: number;
+  currency?: string;
+  tags?: string[];
+  originalMessageUrl?: string;
   source: "submission" | "channel";
   postedAt: string;
   fingerprint: string;
@@ -30,7 +36,8 @@ export interface Subscription {
 }
 export interface Report { id: string; reporter: string; listingId: string; reason: string; timestamp: string; }
 export interface UserProfile { locale?: "ru" | "en"; role?: "buyer" | "agent" | "landlord"; favorites?: string[]; chatMaskId?: string; }
-export interface Domain { next: number; listings: Listing[]; subscriptions: Subscription[]; reports: Report[]; chats: { listingId: string; from: string; text: string; at: string }[]; users: Record<string, UserProfile>; adminUserIds?: string[]; }
+export interface AuditEvent { at: string; actor: string; action: string; listingId?: string; }
+export interface Domain { next: number; listings: Listing[]; subscriptions: Subscription[]; reports: Report[]; chats: { listingId: string; from: string; text: string; at: string }[]; users: Record<string, UserProfile>; adminUserIds?: string[]; audit?: AuditEvent[]; ingestion?: { lastPostAt?: string; accepted: number; duplicates: number; failed: number }; }
 
 const blank = (): Domain => ({ next: 1, listings: [], subscriptions: [], reports: [], chats: [], users: {} });
 

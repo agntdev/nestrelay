@@ -16,6 +16,7 @@ import { handlers } from "./handlers.generated.js";
 import { createDurableSessionStorage, type WorkerEnv } from "./toolkit/session/durable.js";
 import { issueSession, publicListing, readSession, verifyInitData, webPage, webResponse } from "./webapp.js";
 import { fingerprint, now, type Domain } from "./listing-data.js";
+import { matchesFilters, type ListingFilters } from "./filters.js";
 
 export { ChatDO } from "./toolkit/session/durable.js";
 
@@ -25,6 +26,26 @@ function emptyDomain(): Domain {
 
 function domainListings(domain: Domain, includeArchived: boolean): Domain["listings"] {
   return domain.listings.filter((listing) => includeArchived || !listing.archived);
+}
+
+function numberParam(url: URL, key: string): number | undefined {
+  const value = url.searchParams.get(key);
+  if (value === null || value === "") return undefined;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : undefined;
+}
+function queryFilters(url: URL): ListingFilters {
+  return {
+    q: url.searchParams.get("q") ?? undefined, city: url.searchParams.get("city") ?? undefined,
+    neighborhood: url.searchParams.get("neighborhood") ?? undefined, minPrice: numberParam(url, "minPrice"),
+    maxPrice: numberParam(url, "maxPrice") ?? numberParam(url, "max"), currency: url.searchParams.get("currency") ?? undefined,
+    propertyType: url.searchParams.get("propertyType") ?? undefined, bedrooms: numberParam(url, "bedrooms"),
+    minArea: numberParam(url, "minArea"), maxArea: numberParam(url, "maxArea"),
+    latitude: numberParam(url, "lat"), longitude: numberParam(url, "lng"), radiusKm: numberParam(url, "radiusKm"),
+    tags: url.searchParams.get("tags")?.split(",").map((x) => x.trim()).filter(Boolean),
+    source: (url.searchParams.get("source") as ListingFilters["source"]) ?? undefined,
+    from: url.searchParams.get("from") ?? undefined, to: url.searchParams.get("to") ?? undefined,
+  };
 }
 
 // A grammY context under Workers additionally carries the runtime `env`, so a
@@ -123,18 +144,27 @@ export default {
       const read = async (): Promise<Domain> => { const r = await stub.fetch("https://do/domain", { method: "GET" }); return r.status === 204 ? emptyDomain() : await r.json() as Domain; };
       const write = (value: Domain) => stub.fetch("https://do/domain", { method: "PUT", body: JSON.stringify(value) });
       if ((url.pathname === "/webapp/listings" || url.pathname === "/admin/listings") && request.method === "GET") {
-        const q = (url.searchParams.get("q") ?? "").trim().toLowerCase();
-        const max = Number(url.searchParams.get("maxPrice"));
         const sort = url.searchParams.get("sort");
-        const listings = domainListings(await read(), adminRoute).filter((l) => !q || `${l.title} ${l.description} ${l.location} ${l.propertyType}`.toLowerCase().includes(q)).filter((l) => !Number.isFinite(max) || max <= 0 || l.price <= max).sort((a, b) => sort === "price" ? a.price - b.price : b.postedAt.localeCompare(a.postedAt));
-        return webResponse({ listings: listings.map(publicListing) });
+        const page = Math.max(1, Math.floor(numberParam(url, "page") ?? 1));
+        const perPage = Math.min(50, Math.max(1, Math.floor(numberParam(url, "perPage") ?? 20)));
+        const listings = domainListings(await read(), adminRoute).filter((l) => adminRoute ? matchesFilters({ ...l, archived: false }, queryFilters(url)) || l.archived : matchesFilters(l, queryFilters(url))).sort((a, b) => sort === "price" ? a.price - b.price : b.postedAt.localeCompare(a.postedAt));
+        return webResponse({ listings: listings.slice((page - 1) * perPage, page * perPage).map(publicListing), page, perPage, total: listings.length, hasMore: page * perPage < listings.length });
+      }
+      if (/^\/webapp\/listings\/l\d+$/.test(url.pathname) && request.method === "GET") {
+        const listing = (await read()).listings.find((item) => item.id === url.pathname.split("/").at(-1) && !item.archived);
+        return listing ? webResponse({ listing: publicListing(listing) }) : webResponse({ error: "Not found" }, 404);
       }
       if (url.pathname === "/webapp/subscriptions" && request.method === "GET") { const domain = await read(); return webResponse({ subscriptions: domain.subscriptions.filter((s) => s.owner === claims.userId) }); }
-      if (url.pathname === "/webapp/subscriptions" && request.method === "POST") { const body = await request.json() as { location?: string; priceMax?: number }; const domain = await read(); domain.subscriptions.push({ id: `s${domain.next++}`, owner: claims.userId, chatId: Number(claims.userId), location: body.location, priceMax: body.priceMax, active: true, matchDays: [] }); await write(domain); return webResponse({ ok: true }, 201); }
+      if (url.pathname === "/webapp/subscriptions" && request.method === "POST") { const body = await request.json() as Partial<Domain["subscriptions"][number]>; const domain = await read(); const subscription = { id: `s${domain.next++}`, owner: claims.userId, chatId: Number(claims.userId), location: body.location?.slice(0, 160), priceMin: Number.isFinite(Number(body.priceMin)) ? Number(body.priceMin) : undefined, priceMax: Number.isFinite(Number(body.priceMax)) ? Number(body.priceMax) : undefined, propertyType: body.propertyType?.slice(0, 40), bedrooms: Number.isFinite(Number(body.bedrooms)) ? Number(body.bedrooms) : undefined, active: body.active !== false, matchDays: [] }; if (subscription.priceMin !== undefined && subscription.priceMax !== undefined && subscription.priceMin > subscription.priceMax) return webResponse({ error: "Invalid price range" }, 400); domain.subscriptions.push(subscription); await write(domain); return webResponse({ subscription }, 201); }
       if (/^\/webapp\/subscriptions\/s\d+$/.test(url.pathname) && request.method === "DELETE") { const id = url.pathname.split("/").at(-1)!; const domain = await read(); domain.subscriptions = domain.subscriptions.filter((s) => !(s.id === id && s.owner === claims.userId)); await write(domain); return webResponse({ ok: true }); }
       if (/^\/(webapp|admin)\/listings\/l\d+$/.test(url.pathname) && request.method === "PATCH") { const id = url.pathname.split("/").at(-1)!; const body = await request.json().catch(() => null) as Partial<Domain["listings"][number]> | null; const domain = await read(); const listing = domain.listings.find((l) => l.id === id && (adminRoute || l.owner === claims.userId)); if (!listing || !body) return webResponse({ error: "Not found" }, 404); if (body.price !== undefined && (!Number.isFinite(Number(body.price)) || Number(body.price) <= 0)) return webResponse({ error: "Invalid price" }, 400); Object.assign(listing, { title: typeof body.title === "string" ? body.title.slice(0, 120) : listing.title, description: typeof body.description === "string" ? body.description.slice(0, 4000) : listing.description, price: body.price === undefined ? listing.price : Number(body.price), location: typeof body.location === "string" ? body.location.slice(0, 160) : listing.location, archived: typeof body.archived === "boolean" ? body.archived : listing.archived }); listing.fingerprint = fingerprint(listing.title, listing.location, listing.price); await write(domain); return webResponse({ listing: publicListing(listing) }); }
-      if (url.pathname === "/admin/listings" && request.method === "POST") { const body = await request.json().catch(() => null) as Partial<Domain["listings"][number]> | null; if (!body || typeof body.title !== "string" || typeof body.description !== "string" || typeof body.location !== "string" || !Number.isFinite(Number(body.price)) || Number(body.price) <= 0) return webResponse({ error: "Title, description, location and a positive price are required" }, 400); const domain = await read(); const listing = { id: `l${domain.next++}`, owner: claims.userId, ownerChatId: Number(claims.userId), title: body.title.slice(0, 120), description: body.description.slice(0, 4000), photos: [], price: Number(body.price), location: body.location.slice(0, 160), propertyType: typeof body.propertyType === "string" ? body.propertyType.slice(0, 40) : "apartment", bedrooms: Number.isFinite(Number(body.bedrooms)) ? Number(body.bedrooms) : 0, source: "submission" as const, postedAt: now().toISOString(), fingerprint: fingerprint(body.title, body.location, Number(body.price)) }; domain.listings.push(listing); await write(domain); return webResponse({ listing: publicListing(listing) }, 201); }
+      if ((url.pathname === "/admin/listings" || url.pathname === "/webapp/listings") && request.method === "POST") { const body = await request.json().catch(() => null) as Partial<Domain["listings"][number]> | null; if (!body || typeof body.title !== "string" || typeof body.description !== "string" || typeof body.location !== "string" || !Number.isFinite(Number(body.price)) || Number(body.price) <= 0) return webResponse({ error: "Title, description, location and a positive price are required" }, 400); const domain = await read(); const fp = fingerprint(body.title, body.location, Number(body.price)); const duplicate = domain.listings.find((item) => item.fingerprint === fp); if (duplicate) return webResponse({ error: "Duplicate listing", listing: publicListing(duplicate) }, 409); const listing = { id: `l${domain.next++}`, owner: claims.userId, ownerChatId: Number(claims.userId), title: body.title.slice(0, 120), description: body.description.slice(0, 4000), photos: Array.isArray(body.photos) ? body.photos.filter((x): x is string => typeof x === "string").slice(0, 10) : [], price: Number(body.price), currency: typeof body.currency === "string" ? body.currency.slice(0, 8).toUpperCase() : "USD", location: body.location.slice(0, 160), propertyType: typeof body.propertyType === "string" ? body.propertyType.slice(0, 40) : "apartment", bedrooms: Number.isFinite(Number(body.bedrooms)) ? Number(body.bedrooms) : 0, area: Number.isFinite(Number(body.area)) ? Number(body.area) : undefined, tags: Array.isArray(body.tags) ? body.tags.filter((x): x is string => typeof x === "string").slice(0, 12) : [], source: "submission" as const, postedAt: now().toISOString(), fingerprint: fp }; domain.listings.push(listing); domain.audit ??= []; domain.audit.push({ at: now().toISOString(), actor: claims.userId, action: "created", listingId: listing.id }); await write(domain); return webResponse({ listing: publicListing(listing) }, 201); }
       if (/^\/admin\/listings\/l\d+$/.test(url.pathname) && request.method === "DELETE") { const id = url.pathname.split("/").at(-1)!; const domain = await read(); const listing = domain.listings.find((l) => l.id === id); if (!listing) return webResponse({ error: "Not found" }, 404); listing.archived = true; await write(domain); return webResponse({ ok: true }); }
+      if (url.pathname === "/admin/listings/bulk" && request.method === "POST") { const body = await request.json().catch(() => null) as { ids?: string[]; action?: "archive" | "restore" } | null; if (!body?.ids?.length || (body.action !== "archive" && body.action !== "restore")) return webResponse({ error: "Listing ids and action are required" }, 400); const domain = await read(); const wanted = new Set(body.ids.slice(0, 50)); let changed = 0; for (const listing of domain.listings) if (wanted.has(listing.id)) { listing.archived = body.action === "archive"; changed++; } domain.audit ??= []; domain.audit.push({ at: now().toISOString(), actor: claims.userId, action: `bulk-${body.action}` }); await write(domain); return webResponse({ changed }); }
+      if (url.pathname === "/admin/reports" && request.method === "GET") { const domain = await read(); return webResponse({ reports: domain.reports, audit: domain.audit ?? [] }); }
+      if (url.pathname === "/admin/dedup" && request.method === "GET") { const domain = await read(); const groups = Object.values(domain.listings.reduce<Record<string, string[]>>((out, item) => { (out[item.fingerprint] ??= []).push(item.id); return out; }, {})).filter((ids) => ids.length > 1); return webResponse({ groups }); }
+      if (url.pathname === "/admin/status" && request.method === "GET") { const domain = await read(); return webResponse({ ingestion: domain.ingestion ?? { accepted: 0, duplicates: 0, failed: 0 }, matching: { subscriptions: domain.subscriptions.filter((s) => s.active).length } }); }
+      if (url.pathname === "/admin/users" && request.method === "GET") { const domain = await read(); return webResponse({ users: Object.entries(domain.users).map(([id, profile]) => ({ id, role: profile.role, locale: profile.locale })) }); }
       return webResponse({ error: "Not found" }, 404);
     }
 
