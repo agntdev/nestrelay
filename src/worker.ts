@@ -15,9 +15,17 @@ import { buildBot, type Ctx } from "./bot.js";
 import { handlers } from "./handlers.generated.js";
 import { createDurableSessionStorage, type WorkerEnv } from "./toolkit/session/durable.js";
 import { issueSession, publicListing, readSession, verifyInitData, webPage, webResponse } from "./webapp.js";
-import type { Domain } from "./listing-data.js";
+import { fingerprint, now, type Domain } from "./listing-data.js";
 
 export { ChatDO } from "./toolkit/session/durable.js";
+
+function emptyDomain(): Domain {
+  return { next: 1, listings: [], subscriptions: [], reports: [], chats: [], users: {}, adminUserIds: [] };
+}
+
+function domainListings(domain: Domain, includeArchived: boolean): Domain["listings"] {
+  return domain.listings.filter((listing) => includeArchived || !listing.archived);
+}
 
 // A grammY context under Workers additionally carries the runtime `env`, so a
 // handler can reach bindings + helpers (e.g. remindAt(ctx.env, …), ctx.env.DB).
@@ -90,28 +98,43 @@ export default {
 
     // The Mini App is served only over HTTPS by Cloudflare. Its API authenticates
     // Telegram's signed initData and uses a 15-minute, CSRF-bound bearer token.
-    if (url.pathname === "/webapp" && request.method === "GET") {
+    if ((url.pathname === "/webapp" || url.pathname === "/admin") && request.method === "GET") {
       if (url.protocol !== "https:") return new Response("HTTPS required", { status: 400 });
-      return new Response(webPage(), { headers: { "content-type": "text/html; charset=utf-8", "content-security-policy": "default-src 'self' https://telegram.org; style-src 'unsafe-inline'; script-src 'unsafe-inline' https://telegram.org; connect-src 'self'" } });
+      return new Response(webPage(url.pathname === "/admin" ? "admin" : "catalog"), { headers: { "content-type": "text/html; charset=utf-8", "content-security-policy": "default-src 'self' https://telegram.org; style-src 'unsafe-inline'; script-src 'unsafe-inline' https://telegram.org; connect-src 'self'" } });
     }
-    if (url.pathname === "/webapp/auth" && request.method === "POST") {
+    if ((url.pathname === "/webapp/auth" || url.pathname === "/admin/auth") && request.method === "POST") {
       if (url.protocol !== "https:") return webResponse({ error: "HTTPS required" }, 400);
       const body = await request.json().catch(() => null) as { initData?: string } | null;
       const user = await verifyInitData(body?.initData ?? "", env.BOT_TOKEN);
       if (!user) return webResponse({ error: "Unauthorized" }, 401);
-      return webResponse(await issueSession(user.id, env.BOT_TOKEN));
+      const stub = env.CHAT_DO.get(env.CHAT_DO.idFromName("realestate:catalog"));
+      const r = await stub.fetch("https://do/domain", { method: "GET" });
+      const domain = r.status === 204 ? emptyDomain() : await r.json() as Domain;
+      const admin = (domain.adminUserIds ?? []).includes(user.id);
+      if (url.pathname === "/admin/auth" && !admin) return webResponse({ error: "Forbidden" }, 403);
+      return webResponse(await issueSession(user.id, env.BOT_TOKEN, admin));
     }
-    if (url.pathname.startsWith("/webapp/")) {
+    if (url.pathname.startsWith("/webapp/") || url.pathname.startsWith("/admin/")) {
       const claims = await readSession(request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? null, env.BOT_TOKEN);
       if (!claims || request.headers.get("x-csrf-token") !== claims.csrf) return webResponse({ error: "Unauthorized" }, 401);
+      const adminRoute = url.pathname.startsWith("/admin/");
+      if (adminRoute && !claims.admin) return webResponse({ error: "Forbidden" }, 403);
       const stub = env.CHAT_DO.get(env.CHAT_DO.idFromName("realestate:catalog"));
-      const read = async (): Promise<Domain> => { const r = await stub.fetch("https://do/domain", { method: "GET" }); return r.status === 204 ? { next: 1, listings: [], subscriptions: [], reports: [], chats: [], users: {} } : await r.json() as Domain; };
+      const read = async (): Promise<Domain> => { const r = await stub.fetch("https://do/domain", { method: "GET" }); return r.status === 204 ? emptyDomain() : await r.json() as Domain; };
       const write = (value: Domain) => stub.fetch("https://do/domain", { method: "PUT", body: JSON.stringify(value) });
-      if (url.pathname === "/webapp/listings" && request.method === "GET") { const domain = await read(); return webResponse({ listings: domain.listings.filter((l) => !l.archived).map(publicListing) }); }
+      if ((url.pathname === "/webapp/listings" || url.pathname === "/admin/listings") && request.method === "GET") {
+        const q = (url.searchParams.get("q") ?? "").trim().toLowerCase();
+        const max = Number(url.searchParams.get("maxPrice"));
+        const sort = url.searchParams.get("sort");
+        const listings = domainListings(await read(), adminRoute).filter((l) => !q || `${l.title} ${l.description} ${l.location} ${l.propertyType}`.toLowerCase().includes(q)).filter((l) => !Number.isFinite(max) || max <= 0 || l.price <= max).sort((a, b) => sort === "price" ? a.price - b.price : b.postedAt.localeCompare(a.postedAt));
+        return webResponse({ listings: listings.map(publicListing) });
+      }
       if (url.pathname === "/webapp/subscriptions" && request.method === "GET") { const domain = await read(); return webResponse({ subscriptions: domain.subscriptions.filter((s) => s.owner === claims.userId) }); }
       if (url.pathname === "/webapp/subscriptions" && request.method === "POST") { const body = await request.json() as { location?: string; priceMax?: number }; const domain = await read(); domain.subscriptions.push({ id: `s${domain.next++}`, owner: claims.userId, chatId: Number(claims.userId), location: body.location, priceMax: body.priceMax, active: true, matchDays: [] }); await write(domain); return webResponse({ ok: true }, 201); }
       if (/^\/webapp\/subscriptions\/s\d+$/.test(url.pathname) && request.method === "DELETE") { const id = url.pathname.split("/").at(-1)!; const domain = await read(); domain.subscriptions = domain.subscriptions.filter((s) => !(s.id === id && s.owner === claims.userId)); await write(domain); return webResponse({ ok: true }); }
-      if (/^\/webapp\/listings\/l\d+$/.test(url.pathname) && request.method === "PATCH") { const id = url.pathname.split("/").at(-1)!; const body = await request.json() as Partial<Domain["listings"][number]>; const domain = await read(); const listing = domain.listings.find((l) => l.id === id && l.owner === claims.userId); if (!listing) return webResponse({ error: "Not found" }, 404); Object.assign(listing, { title: body.title ?? listing.title, description: body.description ?? listing.description, price: body.price ?? listing.price, location: body.location ?? listing.location, archived: body.archived ?? listing.archived }); await write(domain); return webResponse({ listing: publicListing(listing) }); }
+      if (/^\/(webapp|admin)\/listings\/l\d+$/.test(url.pathname) && request.method === "PATCH") { const id = url.pathname.split("/").at(-1)!; const body = await request.json().catch(() => null) as Partial<Domain["listings"][number]> | null; const domain = await read(); const listing = domain.listings.find((l) => l.id === id && (adminRoute || l.owner === claims.userId)); if (!listing || !body) return webResponse({ error: "Not found" }, 404); if (body.price !== undefined && (!Number.isFinite(Number(body.price)) || Number(body.price) <= 0)) return webResponse({ error: "Invalid price" }, 400); Object.assign(listing, { title: typeof body.title === "string" ? body.title.slice(0, 120) : listing.title, description: typeof body.description === "string" ? body.description.slice(0, 4000) : listing.description, price: body.price === undefined ? listing.price : Number(body.price), location: typeof body.location === "string" ? body.location.slice(0, 160) : listing.location, archived: typeof body.archived === "boolean" ? body.archived : listing.archived }); listing.fingerprint = fingerprint(listing.title, listing.location, listing.price); await write(domain); return webResponse({ listing: publicListing(listing) }); }
+      if (url.pathname === "/admin/listings" && request.method === "POST") { const body = await request.json().catch(() => null) as Partial<Domain["listings"][number]> | null; if (!body || typeof body.title !== "string" || typeof body.description !== "string" || typeof body.location !== "string" || !Number.isFinite(Number(body.price)) || Number(body.price) <= 0) return webResponse({ error: "Title, description, location and a positive price are required" }, 400); const domain = await read(); const listing = { id: `l${domain.next++}`, owner: claims.userId, ownerChatId: Number(claims.userId), title: body.title.slice(0, 120), description: body.description.slice(0, 4000), photos: [], price: Number(body.price), location: body.location.slice(0, 160), propertyType: typeof body.propertyType === "string" ? body.propertyType.slice(0, 40) : "apartment", bedrooms: Number.isFinite(Number(body.bedrooms)) ? Number(body.bedrooms) : 0, source: "submission" as const, postedAt: now().toISOString(), fingerprint: fingerprint(body.title, body.location, Number(body.price)) }; domain.listings.push(listing); await write(domain); return webResponse({ listing: publicListing(listing) }, 201); }
+      if (/^\/admin\/listings\/l\d+$/.test(url.pathname) && request.method === "DELETE") { const id = url.pathname.split("/").at(-1)!; const domain = await read(); const listing = domain.listings.find((l) => l.id === id); if (!listing) return webResponse({ error: "Not found" }, 404); listing.archived = true; await write(domain); return webResponse({ ok: true }); }
       return webResponse({ error: "Not found" }, 404);
     }
 

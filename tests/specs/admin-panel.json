@@ -1,0 +1,16 @@
+[
+  {
+    "name": "admin panel explains where access is confirmed",
+    "steps": [
+      {
+        "send": { "callback": "admin:access" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": { "text": "Откройте этот пункт в группе модерации. Там бот подтвердит права администратора." }
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -30,7 +30,7 @@ export interface Subscription {
 }
 export interface Report { id: string; reporter: string; listingId: string; reason: string; timestamp: string; }
 export interface UserProfile { locale?: "ru" | "en"; role?: "buyer" | "agent" | "landlord"; favorites?: string[]; chatMaskId?: string; }
-export interface Domain { next: number; listings: Listing[]; subscriptions: Subscription[]; reports: Report[]; chats: { listingId: string; from: string; text: string; at: string }[]; users: Record<string, UserProfile>; }
+export interface Domain { next: number; listings: Listing[]; subscriptions: Subscription[]; reports: Report[]; chats: { listingId: string; from: string; text: string; at: string }[]; users: Record<string, UserProfile>; adminUserIds?: string[]; }
 
 const blank = (): Domain => ({ next: 1, listings: [], subscriptions: [], reports: [], chats: [], users: {} });
 
