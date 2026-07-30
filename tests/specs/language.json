@@ -1,0 +1,6 @@
+[
+  { "name": "/language offers a language picker", "steps": [
+    { "send": { "text": "/language" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Выберите язык интерфейса." } }] },
+    { "send": { "callback": "language:ru" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Язык интерфейса: русский." } }] }
+  ] }
+]

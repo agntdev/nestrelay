@@ -29,9 +29,10 @@ export interface Subscription {
   matchDays: string[];
 }
 export interface Report { id: string; reporter: string; listingId: string; reason: string; timestamp: string; }
-export interface Domain { next: number; listings: Listing[]; subscriptions: Subscription[]; reports: Report[]; chats: { listingId: string; from: string; text: string; at: string }[]; }
+export interface UserProfile { locale?: "ru" | "en"; role?: "buyer" | "agent" | "landlord"; favorites?: string[]; chatMaskId?: string; }
+export interface Domain { next: number; listings: Listing[]; subscriptions: Subscription[]; reports: Report[]; chats: { listingId: string; from: string; text: string; at: string }[]; users: Record<string, UserProfile>; }
 
-const blank = (): Domain => ({ next: 1, listings: [], subscriptions: [], reports: [], chats: [] });
+const blank = (): Domain => ({ next: 1, listings: [], subscriptions: [], reports: [], chats: [], users: {} });
 
 // All listing timestamps pass through this seam. Production uses the wall
 // clock; a test can install a fixed clock without changing business code.
@@ -72,6 +73,6 @@ export function matches(listing: Listing, sub: Subscription): boolean {
     (!sub.propertyType || listing.propertyType === sub.propertyType) &&
     (sub.bedrooms === undefined || listing.bedrooms === sub.bedrooms);
 }
-export function listingText(l: Listing): string {
-  return `${l.title}\n${l.location} · ${l.propertyType} · ${l.bedrooms} bed\n${l.price.toLocaleString()}\n${l.description}`;
+export function listingText(l: Listing, locale = "ru"): string {
+  return `${l.title}\n${l.location} · ${l.propertyType} · ${l.bedrooms} ${locale === "ru" ? "сп." : "bed"}\n${l.price.toLocaleString(locale === "ru" ? "ru-RU" : "en-US")}\n${l.description}`;
 }

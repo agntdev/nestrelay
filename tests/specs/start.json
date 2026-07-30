@@ -7,7 +7,7 @@
         "expect": [
           {
             "method": "sendMessage",
-            "payload": { "text": "Find a place, share a listing, or save a search." }
+            "payload": { "text": "Найдите жильё, разместите объявление или сохраните поиск." }
           }
         ]
       }

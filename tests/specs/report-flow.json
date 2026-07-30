@@ -11,8 +11,8 @@
       { "send": { "callback": "submit:type:apartment" }, "expect": [{ "method": "sendMessage" }] },
       { "send": { "callback": "submit:beds:1" }, "expect": [{ "method": "sendMessage" }] },
       { "send": { "callback": "submit:confirm" }, "expect": [{ "method": "sendMessage" }] },
-      { "send": { "callback": "report:listing:l1" }, "expect": [{ "method": "sendMessage", "payload": { "text": "What’s the issue?" } }] },
-      { "send": { "callback": "report:reason:misleading" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Thanks. We’ve sent this listing to moderation and removed it from the catalog while it’s reviewed." } }] }
+      { "send": { "callback": "report:listing:l1" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Что не так с объявлением?" } }] },
+      { "send": { "callback": "report:reason:misleading" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Спасибо. Мы отправили объявление на модерацию и скрыли его из каталога до проверки." } }] }
     ]
   }
 ]

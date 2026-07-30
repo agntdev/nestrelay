@@ -7,7 +7,7 @@
           {
             "method": "sendMessage",
             "payload": {
-              "text": "No saved filters yet — create one to get matching listings."
+              "text": "Сохранённых фильтров пока нет — создайте подписку, чтобы получать подходящие объявления."
             }
           }
         ],

@@ -7,7 +7,7 @@
           {
             "method": "sendMessage",
             "payload": {
-              "text": "There are no listings to report yet."
+              "text": "Пока нет объявлений для жалобы."
             }
           }
         ],

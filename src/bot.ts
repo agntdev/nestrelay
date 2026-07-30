@@ -59,7 +59,7 @@ export async function buildBot(token: string, opts: BuildBotOptions = {}) {
       const failedCtx = (err as { ctx?: Ctx }).ctx;
       if (!failedCtx?.chat) return;
       void failedCtx
-        .reply("We couldn’t complete that just now. Please try again in a moment.")
+        .reply("Сейчас не удалось выполнить действие. Попробуйте ещё раз.")
         .catch((replyErr) => console.error("[realestate] fallback reply failed", replyErr));
     },
   });
@@ -68,7 +68,7 @@ export async function buildBot(token: string, opts: BuildBotOptions = {}) {
   for (const h of handlers) bot.use(h);
 
   bot.on("message", (ctx) =>
-    ctx.reply("I didn’t understand that. Use the menu or tap /help for guidance."),
+    ctx.reply("Не удалось распознать сообщение. Откройте меню или нажмите /help."),
   );
 
   return bot;

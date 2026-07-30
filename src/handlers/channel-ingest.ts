@@ -1,6 +1,7 @@
 import { Composer } from "grammy";
 import type { Ctx } from "../bot.js";
 import { day, fingerprint, matches, nextId, now, readDomain, writeDomain, type Listing } from "../listing-data.js";
+import { t } from "../i18n.js";
 
 // Telegram delivers posts only from channels where the bot is present. This is
 // the supported Bot API route for source ingestion; it never pretends to scrape
@@ -23,7 +24,7 @@ composer.on("channel_post:text", async (ctx) => {
   for (const sub of data.subscriptions.filter((s) => matches(listing, s))) {
     if (sub.matchDays.filter((d) => d === day()).length >= 20) continue;
     sub.matchDays.push(day());
-    try { await ctx.api.sendMessage(sub.chatId, `A channel listing matches your subscription.\n\n${listing.title}\n${listing.location} · ${listing.price.toLocaleString()}`); } catch { /* Continue delivering to other subscribers. */ }
+    try { await ctx.api.sendMessage(sub.chatId, await t(ctx, "match", { listing: `${listing.title}\n${listing.location} · ${listing.price.toLocaleString("ru-RU")}` })); } catch { /* Continue delivering to other subscribers. */ }
   }
   await writeDomain(ctx, data);
 });

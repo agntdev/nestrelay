@@ -2,16 +2,16 @@
   {
     "name": "submit listing appears in catalog",
     "steps": [
-      { "send": { "callback": "submit:start" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Send photos if you have them, then tap Continue." } }] },
-      { "send": { "callback": "submit:photos:done" }, "expect": [{ "method": "sendMessage", "payload": { "text": "What should buyers see as the title?" } }] },
-      { "send": { "text": "Park apartment" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Add a short description." } }] },
-      { "send": { "text": "Sunny place" }, "expect": [{ "method": "sendMessage", "payload": { "text": "What’s the price?" } }] },
-      { "send": { "text": "1200" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Where is the property?" } }] },
-      { "send": { "text": "Riverside" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Pick the property type. We suggest apartment." } }] },
-      { "send": { "callback": "submit:type:apartment" }, "expect": [{ "method": "sendMessage", "payload": { "text": "How many bedrooms does it have?" } }] },
-      { "send": { "callback": "submit:beds:2" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Check your listing:\nPark apartment\nRiverside · apartment · 2 bed\n1,200\nSunny place" } }] },
-      { "send": { "callback": "submit:confirm" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Your listing is live.\n\nPark apartment\nRiverside · apartment · 2 bed\n1,200\nSunny place" } }] },
-      { "send": { "callback": "catalog:search" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Choose a listing." } }] }
+      { "send": { "callback": "submit:start" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Отправьте фотографии, если они есть, затем нажмите «Продолжить»." } }] },
+      { "send": { "callback": "submit:photos:done" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Как назвать объявление?" } }] },
+      { "send": { "text": "Park apartment" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Добавьте короткое описание." } }] },
+      { "send": { "text": "Sunny place" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Укажите цену." } }] },
+      { "send": { "text": "1200" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Где находится объект?" } }] },
+      { "send": { "text": "Riverside" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Выберите тип объекта. Рекомендуем: квартира." } }] },
+      { "send": { "callback": "submit:type:apartment" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Сколько спален?" } }] },
+      { "send": { "callback": "submit:beds:2" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Проверьте объявление:\nPark apartment\nRiverside · apartment · 2 сп.\n1 200\nSunny place" } }] },
+      { "send": { "callback": "submit:confirm" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Объявление опубликовано.\n\nPark apartment\nRiverside · apartment · 2 сп.\n1 200\nSunny place" } }] },
+      { "send": { "callback": "catalog:search" }, "expect": [{ "method": "sendMessage", "payload": { "text": "Выберите объявление." } }] }
     ]
   }
 ]
