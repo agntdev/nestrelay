@@ -1,17 +1,16 @@
 import { Composer } from "grammy";
-
-// SCAFFOLD — generated from the bot blueprint BEFORE the agent runs.
-// Keep a LIVE registration (.command / .callbackQuery / …) so this feature is
-// never an empty stub. Replace the reply body with real logic + copy; if you
-// change the user-facing text, update tests/specs to match EXACTLY.
-// Do NOT rewrite src/bot.ts — buildBot() already auto-loads this module.
-// Menu: wire this into /start via registerMainMenuItem({ label: "Manage Subscriptions", data: "subs:list" }) if the toolkit exposes it.
-
-const composer = new Composer();
-
-composer.callbackQuery("subs:list", async (ctx) => {
-  await ctx.answerCallbackQuery();
-  await ctx.reply("View and edit active filters");
-});
-
+import type { Ctx } from "../bot.js";
+import { inlineButton, inlineKeyboard, registerMainMenuItem } from "../toolkit/index.js";
+import { nextId, readDomain, writeDomain, type Subscription } from "../listing-data.js";
+registerMainMenuItem({ label: "Manage subscriptions", data: "subs:list", order: 30 });
+const composer = new Composer<Ctx>();
+async function dashboard(ctx: Ctx) {
+  const data = await readDomain(ctx); const mine = data.subscriptions.filter((s) => s.owner === String(ctx.from?.id ?? ""));
+  if (!mine.length) { await ctx.reply("No saved filters yet — create one to get matching listings.", { reply_markup: inlineKeyboard([[inlineButton("Add subscription", "subs:add")], [inlineButton("Back to menu", "menu:main")]]) }); return; }
+  await ctx.reply(`Your subscriptions: ${mine.map((s) => `${s.location || "Any location"} · ${s.active ? "active" : "paused"}`).join("\n")}`, { reply_markup: inlineKeyboard([...mine.map((s) => [inlineButton(s.active ? "Pause matches" : "Resume matches", `subs:toggle:${s.id}`)]), [inlineButton("Add subscription", "subs:add")], [inlineButton("Back to menu", "menu:main")]]) });
+}
+composer.callbackQuery("subs:list", async (ctx) => { await ctx.answerCallbackQuery(); await dashboard(ctx); });
+composer.callbackQuery("subs:add", async (ctx) => { await ctx.answerCallbackQuery(); ctx.session.step = "subs:location"; ctx.session.draft = {}; await ctx.reply("Which city or neighborhood should we watch? Type ‘any’ for all locations.", { reply_markup: { force_reply: true, input_field_placeholder: "e.g. Riverside" } }); });
+composer.callbackQuery(/^subs:toggle:(s\d+)$/, async (ctx) => { await ctx.answerCallbackQuery(); const data = await readDomain(ctx); const s = data.subscriptions.find((x) => x.id === ctx.match![1] && x.owner === String(ctx.from?.id ?? "")); if (!s) { await ctx.reply("That subscription isn’t available."); return; } s.active = !s.active; await writeDomain(ctx, data); await ctx.reply(s.active ? "Matches are on again." : "Matches are paused.", { reply_markup: inlineKeyboard([[inlineButton("Manage subscriptions", "subs:list")]]) }); });
+composer.on("message:text", async (ctx, next) => { const step = ctx.session.step; const text = ctx.message.text.trim(); if (step === "subs:location") { ctx.session.draft = { ...ctx.session.draft, location: text.toLowerCase() === "any" ? undefined : text }; ctx.session.step = "subs:max"; await ctx.reply("What’s your maximum price? Type ‘any’ for no limit.", { reply_markup: { force_reply: true, input_field_placeholder: "e.g. 2000" } }); return; } if (step !== "subs:max") return next(); const max = text.toLowerCase() === "any" ? undefined : Number(text.replace(/[^0-9.]/g, "")); if (max !== undefined && (!Number.isFinite(max) || max <= 0)) { await ctx.reply("Enter a positive price or type ‘any’."); return; } const data = await readDomain(ctx); const d = ctx.session.draft as Record<string, unknown>; data.subscriptions.push({ id: nextId(data, "s"), owner: String(ctx.from?.id ?? ""), chatId: ctx.chat!.id, location: d.location as string | undefined, priceMax: max, active: true, matchDays: [] } satisfies Subscription); await writeDomain(ctx, data); ctx.session.step = "idle"; ctx.session.draft = undefined; await ctx.reply("Your subscription is active. We’ll send matching listings, up to 20 a day.", { reply_markup: inlineKeyboard([[inlineButton("Manage subscriptions", "subs:list")], [inlineButton("Browse catalog", "catalog:search")]]) }); });
 export default composer;

@@ -6,7 +6,10 @@ import type { StorageAdapter } from "grammy";
 // bot grows. Durable domain data must NOT live here — use the toolkit's
 // persistent storage (see AGENTS.md).
 export interface Session {
-  // example: step?: "awaiting_amount";
+  step?: string;
+  draft?: Record<string, unknown>;
+  /** Tokenless/local fallback. Production records use the Durable Object store. */
+  localDomain?: Record<string, unknown>;
 }
 
 export type Ctx = BotContext<Session>;
@@ -44,7 +47,7 @@ export interface BuildBotOptions {
  */
 export async function buildBot(token: string, opts: BuildBotOptions = {}) {
   const bot = createBot<Session>(token, {
-    initial: () => ({}),
+    initial: () => ({ step: "idle" }),
     storage: opts.storage,
     telemetryEnv: opts.telemetryEnv,
     telemetryReporterOptions: opts.telemetryReporterOptions,

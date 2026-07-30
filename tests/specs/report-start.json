@@ -7,7 +7,7 @@
           {
             "method": "sendMessage",
             "payload": {
-              "text": "Flag a listing for moderation"
+              "text": "There are no listings to report yet."
             }
           }
         ],

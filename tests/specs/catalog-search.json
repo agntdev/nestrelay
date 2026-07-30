@@ -7,7 +7,7 @@
           {
             "method": "sendMessage",
             "payload": {
-              "text": "Opens search interface with sorting options"
+              "text": "No listings match yet — try another search or submit one."
             }
           }
         ],
