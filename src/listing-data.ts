@@ -32,7 +32,14 @@ export interface Report { id: string; reporter: string; listingId: string; reaso
 export interface Domain { next: number; listings: Listing[]; subscriptions: Subscription[]; reports: Report[]; chats: { listingId: string; from: string; text: string; at: string }[]; }
 
 const blank = (): Domain => ({ next: 1, listings: [], subscriptions: [], reports: [], chats: [] });
-export const now = (): Date => new Date();
+
+// All listing timestamps pass through this seam. Production uses the wall
+// clock; a test can install a fixed clock without changing business code.
+let clock: () => Date = () => new Date();
+export const now = (): Date => clock();
+export function setClockForTests(next?: () => Date): void {
+  clock = next ?? (() => new Date());
+}
 export const day = () => now().toISOString().slice(0, 10);
 export const fingerprint = (title: string, location: string, price: number) =>
   `${title} ${location} ${price}`.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();

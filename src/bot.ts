@@ -8,7 +8,7 @@ import type { StorageAdapter } from "grammy";
 export interface Session {
   step?: string;
   draft?: Record<string, unknown>;
-  /** Tokenless/local fallback. Production records use the Durable Object store. */
+  /** Harness-only fallback. Production records use the Durable Object store. */
   localDomain?: Record<string, unknown>;
 }
 
@@ -51,12 +51,25 @@ export async function buildBot(token: string, opts: BuildBotOptions = {}) {
     storage: opts.storage,
     telemetryEnv: opts.telemetryEnv,
     telemetryReporterOptions: opts.telemetryReporterOptions,
+    // A thrown handler used to be logged only. In a webhook deployment that
+    // looks exactly like a silent bot to the person who sent the update. Keep
+    // the diagnostic server-side, but make one best-effort, safe reply here.
+    onError: (err) => {
+      console.error("[realestate] update failed", err);
+      const failedCtx = (err as { ctx?: Ctx }).ctx;
+      if (!failedCtx?.chat) return;
+      void failedCtx
+        .reply("We couldn’t complete that just now. Please try again in a moment.")
+        .catch((replyErr) => console.error("[realestate] fallback reply failed", replyErr));
+    },
   });
 
   const handlers = opts.handlers ?? (await loadHandlersFromDisk());
   for (const h of handlers) bot.use(h);
 
-  bot.on("message", (ctx) => ctx.reply("Sorry, I didn't understand that. Try /help."));
+  bot.on("message", (ctx) =>
+    ctx.reply("I didn’t understand that. Use the menu or tap /help for guidance."),
+  );
 
   return bot;
 }

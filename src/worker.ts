@@ -48,7 +48,11 @@ function getBot(env: WorkerEnv): Promise<Bot<Ctx>> {
         telemetryEnv: env,
         telemetryReporterOptions: { flushOnRecord: true, startTimer: false },
       });
-      await bot.init();
+      // init() is the only startup call that reaches Telegram. Bound it so a
+      // transient Telegram outage cannot leave a webhook request waiting
+      // forever. A rejected initialization clears botPromise below, allowing
+      // the next update to recover on a fresh attempt.
+      await withTimeout(bot.init(), 8_000, "Telegram initialization timed out");
       return bot;
     })();
     botPromise.catch(() => {
@@ -56,6 +60,22 @@ function getBot(env: WorkerEnv): Promise<Bot<Ctx>> {
     });
   }
   return botPromise;
+}
+
+function withTimeout<T>(work: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+    work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 }
 
 export default {
@@ -75,8 +95,16 @@ export default {
       ) {
         return new Response("forbidden", { status: 403 });
       }
-      const bot = await getBot(env);
-      return webhookCallback(bot, "cloudflare-mod")(request);
+      try {
+        const bot = await getBot(env);
+        return await webhookCallback(bot, "cloudflare-mod")(request);
+      } catch (error) {
+        // Telegram will retry a 5xx response. Logging only the error object
+        // avoids exposing tokens or update bodies while making outages visible
+        // in Worker logs.
+        console.error("[realestate] webhook processing failed", error);
+        return new Response("temporary webhook failure", { status: 503 });
+      }
     }
 
     return new Response("not found", { status: 404 });

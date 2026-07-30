@@ -1,0 +1,18 @@
+[
+  {
+    "name": "free text receives a helpful fallback",
+    "steps": [
+      {
+        "send": { "text": "hello" },
+        "expect": [
+          {
+            "method": "sendMessage",
+            "payload": {
+              "text": "I didn’t understand that. Use the menu or tap /help for guidance."
+            }
+          }
+        ]
+      }
+    ]
+  }
+]
